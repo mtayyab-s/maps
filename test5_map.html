@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.background {
+  fill: none;
+  pointer-events: all;
+}
+
+.districts {
+  fill: #bbb;
+  stroke: #fff;
+  stroke-width: 0.4px;
+  stroke-linejoin: bevel;
+  
+}
+
+.districts :hover {
+  fill: orange;
+  opacity: 0.7;
+  
+}
+
+
+.states :hover {
+  fill: orange;
+  opacity: 0.7;
+}
+
+#state-borders {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.2px;
+  stroke-linejoin: bevel;
+ 
+  pointer-events: none;
+}
+
+.district-borders {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 0.3px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+div.tooltip {	
+    position: absolute;			
+    text-align: center;			
+   						
+    padding: 50px;				
+    font: 12px sans-serif;		
+    background: white;	
+    border: 0px;		
+    border-radius: 8px;			
+    			
+}
+div.tooltip2 {	
+    position: absolute;			
+    text-align: center;			
+   						
+    padding: 20px;				
+    font: 12px sans-serif;		
+    background: white;	
+    border: 0px;		
+    border-radius: 8px;			
+    			
+}
+
+
+
+</style>
+<body>
+<script src="d3.v3.min.js"></script>
+<script src="queue.v1.min.js"></script>
+<script src="topojson.v1.min.js"></script>
+<script>
+
+var width = 960,
+    height = 600,
+    centered;
+
+var projection = d3.geo.albersUsa()
+    .scale(1070)
+    .translate([width / 2, height / 2]);
+
+var path = d3.geo.path()
+    .projection(projection);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var tooltip = d3.select("body").append("div")
+  .attr("class", "tooltip")
+  .style('opacity', 0)
+  .style('position', 'absolute')
+  .style('padding', '0 10px');
+
+svg.append("rect")
+    .attr("class", "background")
+    .attr("width", width)
+    .attr("height", height)
+    .on("disClicked", clicked);
+
+var g = svg.append("g");
+
+
+
+
+queue()
+    .defer(d3.json, "usa1.topojson")
+    .defer(d3.csv,"winners2016.csv")
+    .await(ready);
+
+
+    
+function ready(error, us, data) {
+  if (error) throw error;
+  
+  
+  var dat = topojson.feature(us, us.objects.states).features;
+  var div = d3.select("body").append("div")	
+    .attr("class", "tooltip")				
+    .style("opacity", 0); 
+  
+  
+  g.append("g")
+    .attr("class", "states")
+    .selectAll("path")
+      .data(dat)
+    .enter().append("path")
+      .attr("d", path)
+      .attr("fill",function(d){ 
+        st_name = (d.properties.NAME);
+        var winners = data.filter(function(d) {
+            return d.State.toLowerCase() == st_name.toLowerCase();
+        })
+        if(winners!="")
+            return "red";
+        else
+            return "#aaa";
+      })
+      
+      .on("mouseover", function(d,i) {
+      
+
+           
+      
+        tooltip.transition()
+        .style('opacity', .9)
+        .style('background', 'white')
+        .text(d.properties.NAME)
+        .style('left', (d3.event.pageX ) + 'px')
+        .style('top', (d3.event.pageY ) + 'px')
+        .duration(100);
+        
+        })
+      .on("mouseout", function(d, i) {
+            d3.select(this)
+            
+            .style("opacity",1);
+          tooltip.transition()
+            .style("opacity", "0")
+            .duration(0);
+        })
+      .on("click", clicked);
+ 
+ 
+  
+   
+  
+  g.append("path")
+      .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+      .attr("id", "state-borders")
+      .attr("d", path)
+      
+ 
+      
+}
+
+function clicked(d) {
+   
+   d3.select("body").select("div.tooltip2").remove();
+   d3.selectAll(".states").transition().style("opacity", "0")
+    var div = d3.select("body").append("div")	
+    .attr("class", "tooltip2")				
+    .style("opacity", 0); 
+   d3.select("body").selectAll(".districts").remove();
+   
+    d3.selectAll("div.tooltip").transition()
+            .style("opacity", "0")
+            .duration(0);
+   var st = d.properties.STATE;
+   var st_name = d.properties.NAME;
+
+   
+  
+ 
+   if(st_name==" ")
+    st_name = "1";
+   d3.json("district1.topojson", function(error,congress) {
+    d3.csv("winners2016.csv", function(data) {
+    
+         var winners = data.filter(function(d) {
+            return d.State.toLowerCase() == st_name.toLowerCase();
+    })
+     
+     
+      
+    g.append("g")
+      .attr("class", "districts")
+    .selectAll("path")
+      .data(topojson.feature(congress, congress.objects.collection).features)
+    .enter().append("path")
+    .filter(function(d) {return  d.properties.STATE ==st})
+      .attr("d", path)
+      .attr("fill",function(d){
+      //console.log(winners[0].District); 
+      var dis = d.properties.NAME;
+      var a  =  winners.filter(function(d){
+           return d.District.split('-')[1].replace(/^0+/, '') == dis;
+         });
+      if(a!="")
+        return "blue";
+      })
+      .style("opacity",0.6)
+  
+      
+      .on("click", disClicked)
+      .on("mouseover", function(d,i) {
+         
+         var dis = d.properties.NAME;
+         var fi  = winners.filter(function(d){
+           return(d.District.split('-')[1].replace(/^0+/, '') == dis);
+         });
+        
+        if(fi ==""){
+        
+            div.transition()
+            .duration(500)    
+            .style("opacity", 0);
+            div.transition()
+            .duration(200)    
+            .style("opacity", .9);
+            div.html('<img src="contact.png" alt="Winners" width="100" height="70" >'+'<br/><br/><b><a href="http://www.congressionalappchallenge.us/district-involvement/" target = "_blank">Get your Congressional District involved</a></b>')
+            .style('left', (d3.event.pageX) + 'px')
+            .style('top', (d3.event.pageY+28) + 'px')
+            .style('width',100)
+            .style('height',50)
+            .style('text-align','left');
+            
+        
+       
+        }
+        else{
+             
+
+        var state = fi[0].State;
+        var distr = fi[0].District;
+        var moc = fi[0].MOC;
+        var name = fi[0].Names;
+        var appName = fi[0].AppName;
+        var video =  fi[0].VideoLink;
+        var moc_temp = distr.split('-');
+        var link_moc = "http://www.congressionalappchallenge.us/moc/"+moc_temp[0]+moc_temp[1];
+      
+        div.transition()
+            .duration(500)    
+            .style("opacity", 0);
+        div.transition()
+            .duration(200)    
+            .style("opacity", .9);
+        
+        div.html('<img src="cup.png" alt="Winners" width="100" height="70" >'+"<br/><br/>"+"<b>District: </b>"+distr+"<br/><b>Winner(s): </b>"+name+'<br/><b>MOC: </b><a href="'+link_moc+'" target = "_blank"> Rep. ' +moc+" ("+distr+")"+'</a>'+"<br/><b>School: </b>"+'<br/><b>Winning App Video: </b><a href ="'+video+'" target="_blank">'+appName+'</a>')
+            .style('left', (d3.event.pageX) + 'px')
+            .style('top', (d3.event.pageY +28) + 'px')
+            .style('width',100)
+            .style('height',50)
+            .style('text-align','left');
+            
+            
+            
+        }
+        })
+        
+     
+    
+  
+    
+  
+   
+   }); 
+      
+    
+   });
+ 
+  d3.selectAll(this)
+     .attr("fill", "red")
+ 
+  var x, y, k;
+
+  if (d && centered !== d) {
+    
+    var centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    k = 4;
+    centered = d;
+   
+    
+    
+  } else {
+    
+    x = width / 2;
+    y = height / 2;
+    k = 1;
+    centered = null;
+   
+    
+    
+  }
+
+  g.selectAll("path")
+      .classed("active", centered && function(d) { return d === centered; });
+
+  zoom(g,x,y,k);
+ 
+}
+
+function zoom(g,x,y,k){
+ g.transition()
+      .duration(750)
+      .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")")
+      .style("stroke-width", 1.5 / k + "px");
+      
+
+  
+  
+}
+
+function disClicked(d){
+
+var x, y, k;
+
+     d3.selectAll(".states").transition().style("opacity", "1")
+    //d3.selectAll("div.tooltip").transition()
+            //.style("opacity", "0")
+            //.duration(0);
+    d3.select("body").selectAll(".districts").remove();
+    x = width / 2;
+    y = height / 2;
+    k = 1;
+    centered = null;
+    
+    
+    zoom(g,x,y,k);
+    d3.select("body").select("div.tooltip2").remove();
+}
+</script>
